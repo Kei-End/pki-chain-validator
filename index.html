@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enhanced Certificate Chain Validator</title>
+  <style>
+    :root {
+      --bg: #0b1730;
+      --panel: #102145;
+      --panel-2: #152b57;
+      --border: #29467f;
+      --text: #eaf1ff;
+      --muted: #b9c7ea;
+      --ok-bg: #dff6e6;
+      --ok-border: #3f8f5f;
+      --warn-bg: #fff4d8;
+      --warn-border: #b3871e;
+      --bad-bg: #ffe2e2;
+      --bad-border: #a13535;
+      --accent: #4ea1ff;
+      --purple: #c9b4ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, var(--bg), #08101f);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .container { width: min(1180px, calc(100% - 32px)); margin: 24px auto 40px; }
+    .hero, .panel {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+    .hero { padding: 24px; margin-bottom: 18px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .sub { margin: 0; color: var(--muted); line-height: 1.5; }
+    .panel { padding: 20px; margin-bottom: 18px; }
+    .panel h2 { margin: 0 0 14px; font-size: 20px; color: #dce8ff; }
+    .grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 18px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    @media (max-width: 980px) { .grid, .grid-2 { grid-template-columns: 1fr; } }
+    label { display: block; margin-bottom: 8px; font-weight: 700; }
+    textarea {
+      width: 100%; min-height: 280px; resize: vertical; padding: 14px; border-radius: 12px;
+      border: 1px solid var(--border); background: #08152e; color: var(--text);
+      font-family: Consolas, Monaco, monospace; line-height: 1.45;
+    }
+    input[type="file"] {
+      display: block; width: 100%; padding: 10px; border-radius: 12px; border: 1px solid var(--border);
+      background: #08152e; color: var(--text);
+    }
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    button {
+      border: 0; border-radius: 10px; padding: 11px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
+      background: var(--accent); color: #051225;
+    }
+    button.secondary { background: #d5e4ff; }
+    .hint, .small-note { color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .hint { margin-top: 10px; }
+    .small-note { margin-top: 8px; }
+    .status-box {
+      border-radius: 14px; padding: 16px; border: 2px solid transparent; background: #eef3ff; color: #000; margin-bottom: 16px;
+    }
+    .status-box.ok { background: var(--ok-bg); border-color: var(--ok-border); }
+    .status-box.warn { background: var(--warn-bg); border-color: var(--warn-border); }
+    .status-box.bad { background: var(--bad-bg); border-color: var(--bad-border); }
+    .status-title { margin: 0 0 6px; font-size: 18px; font-weight: 800; color: #000; }
+    .status-desc { margin: 0; line-height: 1.45; color: #000; }
+    .table-wrap { overflow-x: auto; margin-bottom: 16px; }
+    table {
+      width: 100%; border-collapse: collapse; background: #0b1730; border-radius: 12px; overflow: hidden; border: 1px solid var(--border);
+    }
+    thead th { background: #1c5aa8; color: white; text-align: left; padding: 12px; font-size: 14px; }
+    tbody td { padding: 12px; border-top: 1px solid #203b6f; vertical-align: top; font-size: 14px; line-height: 1.45; }
+    .pill { display: inline-block; padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 800; }
+    .pill.pass { background: #dff6e6; color: #154b29; }
+    .pill.warn { background: #fff4d8; color: #6b4b00; }
+    .pill.fail { background: #ffe2e2; color: #711818; }
+    .cert-card, .advice-card {
+      background: #0b1730; border: 1px solid var(--border); border-radius: 14px; padding: 14px; margin-bottom: 12px;
+    }
+    .cert-card h3, .advice-card h3 { margin: 0 0 10px; font-size: 16px; color: #dce8ff; }
+    .kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 10px; font-size: 13px; }
+    .kv div:nth-child(odd) { color: #9db5e7; font-weight: 700; }
+    .kv div:nth-child(even) { color: #eaf1ff; word-break: break-word; }
+    .tree {
+      background: #08152e; border: 1px solid var(--border); border-radius: 12px; padding: 14px;
+      white-space: pre-wrap; font-family: Consolas, Monaco, monospace; color: #dce8ff; line-height: 1.55; min-height: 120px;
+    }
+    ul.clean { margin: 0; padding-left: 18px; line-height: 1.5; }
+    .mono { font-family: Consolas, Monaco, monospace; }
+    .tag { display:inline-block; padding:4px 8px; border-radius:999px; background:#1e3567; color:#dce8ff; font-size:12px; font-weight:700; margin-right:6px; margin-bottom:6px; }
+    .purple { color: var(--purple); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <h1>Enhanced Certificate Chain Validator</h1>
+      <p class="sub">This build accepts PEM, CRT, CER, and DER certificate files, reconstructs the chain, validates the trust path, checks basic ECC policy, warns on likely family mismatch such as GlobalSign R5 versus E46, and suggests the likely bundle correction when a wrong root or intermediate is supplied.</p>
+    </div>
+
+    <div class="grid">
+      <div class="panel">
+        <h2>Input</h2>
+        <label for="certFiles">Upload Certificate Files</label>
+        <input id="certFiles" type="file" accept=".pem,.crt,.cer,.der" multiple />
+        <div class="small-note">You may upload one or more certificate files. DER files are converted locally in the browser.</div>
+
+        <label for="fullChainInput" style="margin-top:14px;">Or Paste Certificate Bundle</label>
+        <textarea id="fullChainInput" placeholder="Paste one or more PEM certificates here..."></textarea>
+
+        <div class="controls">
+          <button id="validateBtn" type="button">Auto Detect &amp; Validate</button>
+          <button id="clearBtn" type="button" class="secondary">Clear</button>
+        </div>
+        <div class="hint">This page is fully client-side. Nothing is sent to a server. For best results, provide the full chain.</div>
+      </div>
+
+      <div class="panel">
+        <h2>Chain Diagram</h2>
+        <div id="chainTree" class="tree">No certificates analysed yet.</div>
+        <div class="small-note">The diagram is rebuilt from actual subject and issuer relationships found in the uploaded bundle.</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Validation Status</h2>
+      <div id="statusBox" class="status-box warn">
+        <p class="status-title">Waiting for input</p>
+        <p class="status-desc">Provide certificate data, then run validation.</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 260px;">Check</th>
+              <th style="width: 120px;">Result</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="checksBody">
+            <tr><td colspan="3">No checks have been run yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="panel">
+        <h2>Detected Certificates</h2>
+        <div id="certCards"><div class="cert-card">No certificates detected yet.</div></div>
+      </div>
+      <div class="panel">
+        <h2>Bundle Guidance</h2>
+        <div id="adviceCards"><div class="advice-card">No guidance available yet.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js"></script>
+  <script>
+    const KNOWN_CA_PATTERNS = [
+      {
+        family: 'GlobalSign ECC R5',
+        matchers: [/globalsign.*r5/i, /globalsign ecc root ca - r5/i, /ecc ov ssl ca 2018/i],
+        notes: 'Likely ECC chain family. Suitable when intermediate indicates GlobalSign ECC OV SSL CA 2018 or related ECC hierarchy.'
+      },
+      {
+        family: 'GlobalSign E46',
+        matchers: [/globalsign.*e46/i, /globalsign root e46/i],
+        notes: 'Likely RSA-oriented hierarchy. This can be a wrong family if the intermediate belongs to the ECC R5 branch.'
+      }
+    ];
+
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function dnToString(attrs = []) {
+      return attrs.map(a => `${a.shortName || a.name}=${a.value}`).join(', ');
+    }
+
+    function normaliseDn(str = '') {
+      return str.replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+
+    function getCertSubject(cert) { return dnToString(cert.subject.attributes || []); }
+    function getCertIssuer(cert) { return dnToString(cert.issuer.attributes || []); }
+    function getCommonName(cert) {
+      const attr = (cert.subject.attributes || []).find(a => a.name === 'commonName' || a.shortName === 'CN');
+      return attr ? attr.value : '(No CN)';
+    }
+
+    function safeVerify(childCert, parentCert) {
+      try { return childCert.verify(parentCert.publicKey); } catch { return false; }
+    }
+
+    function extractAllPemCerts(text) {
+      const regex = /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g;
+      return text.match(regex) || [];
+    }
+
+    function parsePemCertificate(pem) {
+      try { return forge.pki.certificateFromPem(pem); } catch { return null; }
+    }
+
+    function arrayBufferToPem(buffer) {
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      const base64 = btoa(binary).match(/.{1,64}/g).join('\n');
+      return `-----BEGIN CERTIFICATE-----\n${base64}\n-----END CERTIFICATE-----`;
+    }
+
+    async function readUploadedFiles(files) {
+      const results = [];
+      for (const file of files) {
+        const ext = (file.name.split('.').pop() || '').toLowerCase();
+        if (['pem', 'crt', 'cer'].includes(ext)) {
+          const text = await file.text();
+          const pemMatches = extractAllPemCerts(text);
+          if (pemMatches.length) {
+            pemMatches.forEach(pem => results.push({ source: file.name, pem }));
+          } else {
+            const buffer = await file.arrayBuffer();
+            const pem = arrayBufferToPem(buffer);
+            results.push({ source: file.name, pem });
+          }
+        } else if (ext === 'der') {
+          const buffer = await file.arrayBuffer();
+          const pem = arrayBufferToPem(buffer);
+          results.push({ source: file.name, pem });
+        }
+      }
+      return results;
+    }
+
+    function detectCaFamily(text) {
+      const lowered = (text || '').toLowerCase();
+      for (const pattern of KNOWN_CA_PATTERNS) {
+        if (pattern.matchers.some(re => re.test(lowered))) return pattern.family;
+      }
+      return 'Unknown';
+    }
+
+    function classifyCertificates(pemEntries) {
+      const parsedCerts = pemEntries.map((entry, index) => {
+        const cert = parsePemCertificate(entry.pem);
+        if (!cert) return null;
+        const subject = getCertSubject(cert);
+        const issuer = getCertIssuer(cert);
+        return {
+          id: index + 1,
+          source: entry.source || 'Pasted input',
+          pem: entry.pem,
+          cert,
+          subject,
+          issuer,
+          cn: getCommonName(cert),
+          family: detectCaFamily(subject + ' ' + issuer)
+        };
+      }).filter(Boolean);
+
+      const result = { leaf: null, intermediate: null, root: null, extras: [], parsedCerts, errors: [] };
+      if (!parsedCerts.length) {
+        result.errors.push('No valid certificates were found in the supplied input.');
+        return result;
+      }
+
+      const roots = parsedCerts.filter(c => normaliseDn(c.subject) === normaliseDn(c.issuer));
+      if (roots.length) result.root = roots[0];
+
+      const leaves = parsedCerts.filter(c => !parsedCerts.some(other => other !== c && normaliseDn(other.subject) === normaliseDn(c.issuer)) === false ? false : !parsedCerts.some(other => other !== c && normaliseDn(other.issuer) === normaliseDn(c.subject)));
+      if (leaves.length) result.leaf = leaves[0];
+
+      if (result.leaf) {
+        const leafIssuer = normaliseDn(result.leaf.issuer);
+        const candidateIntermediates = parsedCerts.filter(c => c !== result.leaf && normaliseDn(c.subject) === leafIssuer);
+        if (candidateIntermediates.length) {
+          result.intermediate = candidateIntermediates[0];
+        }
+      }
+
+      if (!result.intermediate) {
+        const mids = parsedCerts.filter(c => c !== result.leaf && c !== result.root && normaliseDn(c.subject) !== normaliseDn(c.issuer));
+        if (mids.length) result.intermediate = mids[0];
+      }
+
+      if (!result.root && result.intermediate) {
+        const intIssuer = normaliseDn(result.intermediate.issuer);
+        const candidateRoots = parsedCerts.filter(c => c !== result.intermediate && normaliseDn(c.subject) === intIssuer);
+        if (candidateRoots.length) result.root = candidateRoots[0];
+      }
+
+      result.extras = parsedCerts.filter(c => c !== result.leaf && c !== result.intermediate && c !== result.root);
+      return result;
+    }
+
+    function getLeafPublicKeyInfo(cert) {
+      try {
+        const pk = cert.publicKey;
+        if (pk && pk.n && pk.e) return { type: 'RSA', bits: pk.n.bitLength(), sig: cert.siginfo?.algorithmOid || '' };
+        if (pk && pk.Q) {
+          let bits = null;
+          const qBytes = pk.Q && pk.Q.x ? pk.Q.x.toByteArray().length : null;
+          if (qBytes) bits = (qBytes - 1) * 8;
+          return { type: 'EC', bits: bits || null, sigOid: cert.signatureOid || '' };
+        }
+      } catch {}
+      return { type: 'Unknown', bits: null, sigOid: cert.signatureOid || '' };
+    }
+
+    function mapSignatureName(oid) {
+      const known = {
+        '1.2.840.10045.4.3.2': 'ecdsa-with-SHA256',
+        '1.2.840.10045.4.3.3': 'ecdsa-with-SHA384',
+        '1.2.840.113549.1.1.11': 'sha256WithRSAEncryption'
+      };
+      return known[oid] || oid || 'Unknown';
+    }
+
+    function buildBundleRecommendation(classified) {
+      const advice = [];
+      if (!classified.leaf) advice.push('Leaf certificate could not be identified. Supply the end-entity server certificate.');
+      if (!classified.intermediate) advice.push('Intermediate certificate could not be identified. Supply the issuing intermediate certificate.');
+      if (!classified.root) advice.push('Root certificate could not be identified. Supply the self-signed root certificate for the same hierarchy.');
+
+      if (classified.leaf && classified.intermediate) {
+        advice.push(`Expected intermediate subject for the leaf is: ${classified.leaf.issuer}`);
+      }
+      if (classified.intermediate && classified.root) {
+        advice.push(`Expected root subject for the detected intermediate is: ${classified.intermediate.issuer}`);
+      }
+      if (classified.intermediate && classified.root) {
+        const intFamily = classified.intermediate.family;
+        const rootFamily = classified.root.family;
+        if (intFamily !== 'Unknown' && rootFamily !== 'Unknown' && intFamily !== rootFamily) {
+          advice.push(`Likely family mismatch detected: intermediate looks like ${intFamily}, while root looks like ${rootFamily}. Replace the root with one from the same family as the intermediate.`);
+        }
+      }
+      if (classified.extras.length) {
+        advice.push(`There are ${classified.extras.length} extra certificate(s) in the bundle. Remove unrelated certificates to avoid deployment confusion.`);
+      }
+      return advice;
+    }
+
+    function validateCertificateChain(classified) {
+      const result = { ok: false, severity: 'bad', summary: '', checks: [], classified, advice: [] };
+      const { leaf, intermediate, root } = classified;
+
+      if (!leaf || !intermediate || !root) {
+        result.severity = 'warn';
+        result.summary = 'Full chain could not be reconstructed with confidence.';
+        result.advice = buildBundleRecommendation(classified);
+        return result;
+      }
+
+      const leafToIntermediateNameMatch = normaliseDn(leaf.issuer) === normaliseDn(intermediate.subject);
+      result.checks.push({ name: 'Leaf issuer matches intermediate subject', status: leafToIntermediateNameMatch ? 'PASS' : 'FAIL', detail: leafToIntermediateNameMatch ? 'Leaf certificate points to the detected intermediate certificate.' : `Leaf issuer is "${leaf.issuer}", but intermediate subject is "${intermediate.subject}".` });
+
+      const intermediateToRootNameMatch = normaliseDn(intermediate.issuer) === normaliseDn(root.subject);
+      result.checks.push({ name: 'Intermediate issuer matches root subject', status: intermediateToRootNameMatch ? 'PASS' : 'FAIL', detail: intermediateToRootNameMatch ? 'Intermediate certificate points to the detected root certificate.' : `Intermediate issuer is "${intermediate.issuer}", but root subject is "${root.subject}".` });
+
+      const leafSig = safeVerify(leaf.cert, intermediate.cert);
+      result.checks.push({ name: 'Leaf signature verification', status: leafSig ? 'PASS' : 'FAIL', detail: leafSig ? 'Leaf certificate signature validates against the intermediate public key.' : 'Leaf certificate signature does not validate against the detected intermediate.' });
+
+      const intSig = safeVerify(intermediate.cert, root.cert);
+      result.checks.push({ name: 'Intermediate signature verification', status: intSig ? 'PASS' : 'FAIL', detail: intSig ? 'Intermediate certificate signature validates against the root public key.' : 'Intermediate certificate signature does not validate against the detected root.' });
+
+      const rootSelfSignedName = normaliseDn(root.subject) === normaliseDn(root.issuer);
+      const rootSelfSignedSig = safeVerify(root.cert, root.cert);
+      result.checks.push({ name: 'Root is self-signed', status: (rootSelfSignedName && rootSelfSignedSig) ? 'PASS' : 'WARN', detail: (rootSelfSignedName && rootSelfSignedSig) ? 'Detected root appears self-signed.' : 'Detected root did not fully validate as self-signed in the browser.' });
+
+      const leafKey = getLeafPublicKeyInfo(leaf.cert);
+      const sigName = mapSignatureName(leafKey.sigOid);
+      const isEc = leafKey.type === 'EC';
+      const is384 = leafKey.bits === 384;
+      const isSha256Ecdsa = sigName === 'ecdsa-with-SHA256';
+
+      result.checks.push({ name: 'Leaf uses EC key', status: isEc ? 'PASS' : 'FAIL', detail: isEc ? `Leaf public key is EC.` : `Leaf public key type is ${leafKey.type}.` });
+      result.checks.push({ name: 'Leaf EC key size is 384-bit', status: is384 ? 'PASS' : (isEc ? 'FAIL' : 'WARN'), detail: isEc ? `Detected EC size: ${leafKey.bits || 'unknown'} bits.` : 'Key size check skipped because leaf is not EC.' });
+      result.checks.push({ name: 'Leaf signature is ecdsa-with-SHA256', status: isSha256Ecdsa ? 'PASS' : (isEc ? 'FAIL' : 'WARN'), detail: `Detected leaf signature algorithm: ${sigName}.` });
+
+      const intFamily = intermediate.family;
+      const rootFamily = root.family;
+      const familyMismatch = intFamily !== 'Unknown' && rootFamily !== 'Unknown' && intFamily !== rootFamily;
+      result.checks.push({ name: 'Known CA family consistency', status: familyMismatch ? 'FAIL' : 'PASS', detail: familyMismatch ? `Intermediate looks like ${intFamily}, but root looks like ${rootFamily}.` : `Detected family alignment: intermediate=${intFamily}, root=${rootFamily}.` });
+
+      result.advice = buildBundleRecommendation(classified);
+      const criticalPass = leafToIntermediateNameMatch && intermediateToRootNameMatch && leafSig && intSig;
+      if (criticalPass) {
+        result.ok = true;
+        result.severity = isEc && is384 && isSha256Ecdsa && !familyMismatch ? 'ok' : 'warn';
+        result.summary = result.severity === 'ok'
+          ? 'Chain is consistent and leaf policy checks passed.'
+          : 'Chain is consistent, but one or more policy or family checks need review.';
+      } else {
+        result.ok = false;
+        result.severity = 'bad';
+        if (!intermediateToRootNameMatch || !intSig) {
+          result.summary = 'Chain mismatch detected. The supplied or detected root does not match the intermediate hierarchy.';
+        } else if (!leafToIntermediateNameMatch || !leafSig) {
+          result.summary = 'Chain mismatch detected. The supplied or detected intermediate does not match the leaf certificate.';
+        } else {
+          result.summary = 'Certificate chain validation failed.';
+        }
+      }
+      return result;
+    }
+
+    function renderStatus(result) {
+      const box = document.getElementById('statusBox');
+      box.className = `status-box ${result.severity}`;
+      box.innerHTML = `<p class="status-title">${escapeHtml(result.severity.toUpperCase())}</p><p class="status-desc">${escapeHtml(result.summary)}</p>`;
+    }
+
+    function renderChecks(result) {
+      const body = document.getElementById('checksBody');
+      const checks = result.checks || [];
+      if (!checks.length) {
+        body.innerHTML = '<tr><td colspan="3">No detailed checks available for this run.</td></tr>';
+        return;
+      }
+      body.innerHTML = checks.map(check => {
+        const cls = check.status === 'PASS' ? 'pass' : check.status === 'WARN' ? 'warn' : 'fail';
+        return `<tr><td>${escapeHtml(check.name)}</td><td><span class="pill ${cls}">${escapeHtml(check.status)}</span></td><td>${escapeHtml(check.detail)}</td></tr>`;
+      }).join('');
+    }
+
+    function renderTree(classified) {
+      const tree = document.getElementById('chainTree');
+      if (!classified || !classified.parsedCerts || !classified.parsedCerts.length) {
+        tree.textContent = 'No certificates analysed yet.';
+        return;
+      }
+      const lines = [];
+      if (classified.root) lines.push(`Root         : ${classified.root.cn}`);
+      if (classified.intermediate) lines.push(` └─Intermediate: ${classified.intermediate.cn}`);
+      if (classified.leaf) lines.push(`    └─Leaf      : ${classified.leaf.cn}`);
+      if (!classified.root || !classified.intermediate || !classified.leaf) {
+        lines.push('');
+        lines.push('Full chain could not be reconstructed with confidence.');
+      }
+      if (classified.extras.length) {
+        lines.push('');
+        lines.push('Extra / Unused Certificates:');
+        classified.extras.forEach(c => lines.push(` - ${c.cn} [${c.source}]`));
+      }
+      tree.textContent = lines.join('\n');
+    }
+
+    function renderCertificates(classified) {
+      const cards = document.getElementById('certCards');
+      if (!classified || !classified.parsedCerts || !classified.parsedCerts.length) {
+        cards.innerHTML = '<div class="cert-card">No certificates detected.</div>';
+        return;
+      }
+      cards.innerHTML = classified.parsedCerts.map(c => {
+        let role = 'Unknown';
+        if (classified.leaf === c) role = 'Leaf';
+        else if (classified.intermediate === c) role = 'Intermediate';
+        else if (classified.root === c) role = 'Root';
+        return `<div class="cert-card">
+          <h3>${escapeHtml(role)} Certificate — ${escapeHtml(c.cn)}</h3>
+          <div class="kv">
+            <div>Source</div><div>${escapeHtml(c.source)}</div>
+            <div>Subject</div><div>${escapeHtml(c.subject)}</div>
+            <div>Issuer</div><div>${escapeHtml(c.issuer)}</div>
+            <div>Family</div><div>${escapeHtml(c.family)}</div>
+            <div>Order Found</div><div>${escapeHtml(String(c.id))}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderAdvice(result) {
+      const wrap = document.getElementById('adviceCards');
+      const advice = result.advice || [];
+      if (!advice.length) {
+        wrap.innerHTML = '<div class="advice-card">No bundle guidance available.</div>';
+        return;
+      }
+      const classified = result.classified || {};
+      const tags = [];
+      if (classified.leaf) tags.push(`<span class="tag">Leaf issuer: ${escapeHtml(classified.leaf.issuer)}</span>`);
+      if (classified.intermediate) tags.push(`<span class="tag">Expected root: ${escapeHtml(classified.intermediate.issuer)}</span>`);
+      wrap.innerHTML = `<div class="advice-card">
+        <h3>Suggested Correction</h3>
+        <div>${tags.join(' ')}</div>
+        <ul class="clean">${advice.map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
+      </div>`;
+    }
+
+    async function gatherPemEntries() {
+      const entries = [];
+      const pasteText = document.getElementById('fullChainInput').value.trim();
+      if (pasteText) {
+        extractAllPemCerts(pasteText).forEach(pem => entries.push({ source: 'Pasted input', pem }));
+      }
+      const files = document.getElementById('certFiles').files;
+      if (files && files.length) {
+        const uploaded = await readUploadedFiles(Array.from(files));
+        uploaded.forEach(e => entries.push(e));
+      }
+      return entries;
+    }
+
+    async function runValidation() {
+      const pemEntries = await gatherPemEntries();
+      if (!pemEntries.length) {
+        renderStatus({ severity: 'warn', summary: 'No certificate data provided.' });
+        renderChecks({ checks: [] });
+        renderTree({ parsedCerts: [] });
+        renderCertificates({ parsedCerts: [] });
+        renderAdvice({ advice: [] });
+        return;
+      }
+      const classified = classifyCertificates(pemEntries);
+      if (classified.errors.length) {
+        const result = { severity: 'bad', summary: classified.errors.join(' '), checks: [], classified, advice: [] };
+        renderStatus(result); renderChecks(result); renderTree(classified); renderCertificates(classified); renderAdvice(result);
+        return;
+      }
+      const result = validateCertificateChain(classified);
+      renderStatus(result); renderChecks(result); renderTree(classified); renderCertificates(classified); renderAdvice(result);
+    }
+
+    document.getElementById('validateBtn').addEventListener('click', runValidation);
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      document.getElementById('fullChainInput').value = '';
+      document.getElementById('certFiles').value = '';
+      renderStatus({ severity: 'warn', summary: 'Provide certificate data, then run validation.' });
+      renderChecks({ checks: [] });
+      renderTree({ parsedCerts: [] });
+      renderCertificates({ parsedCerts: [] });
+      renderAdvice({ advice: [] });
+    });
+  </script>
+</body>
+</html>
